@@ -1,0 +1,85 @@
+#include "html510.h"
+
+const char htmlPage[] PROGMEM = R"=====(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coordinate Plotter</title>
+    <script>
+        function plotPoint(x, y) {
+            var canvas = document.getElementById("plotCanvas");
+            var ctx = canvas.getContext("2d");
+            ctx.fillStyle = "red";
+            ctx.fillRect(x, y, 5, 5); // Adjust the size of the point as needed
+        }
+
+        function handleCoordinates(data) {
+            var coordinates = data.split(",");
+            var x = parseInt(coordinates[0]);
+            var y = parseInt(coordinates[1]);
+            plotPoint(x, y);
+        }
+
+        // Example: You can use WebSockets or AJAX to get real-time data from the server
+        // For simplicity, let's assume you use AJAX to poll the server every 1 second
+        setInterval(function() {
+            // Assuming getText() retrieves data in the format "x,y"
+            fetch('/getCoordinates')
+                .then(response => response.text())
+                .then(data => handleCoordinates(data));
+        }, 1000);
+    </script>
+</head>
+<body>
+    <canvas id="plotCanvas" width="500" height="500" style="border:1px solid #000;"></canvas>
+</body>
+</html>
+)=====";
+
+void handleHomePage() {
+    // Send the HTML page to the client
+    sendhtml(htmlPage);
+}
+
+void HTML510Server::begin(int port) {
+    server.begin(port);
+    // Attach the handler for the home page
+    attachHandler("/", handleHomePage);
+}
+
+void handleCoordinatesRequest() {
+    // Example: You need to implement a method to get the latest coordinates
+    // For simplicity, let's assume you have a method named getLatestCoordinates()
+    String coordinates = getLatestCoordinates();
+    sendplain(coordinates);
+}
+
+void HTML510Server::serve() {
+    int breakflag = 0;
+    client = server.available();
+    if (client) {
+        String currentLine = "";
+        while (client.connected()) {
+            if (client.available()) {
+                char c = client.read();
+                currentLine += c;
+                if (c == '\n') {
+                    if (currentLine.startsWith("GET /getCoordinates")) {
+                        handleCoordinatesRequest();
+                        client.stop();
+                        return;
+                    } else if (currentLine == "\r\n") {
+                        // End of HTTP request header, serve the home page
+                        handleHomePage();
+                        client.stop();
+                        return;
+                    }
+                    currentLine = "";
+                }
+            }
+        }
+        client.stop();
+    }
+}
